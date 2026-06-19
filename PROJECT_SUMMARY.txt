@@ -1,0 +1,336 @@
+KALSHI BOT PROJECT SUMMARY
+=========================
+
+Overview
+--------
+This project is a Python-based trading bot for Kalshi prediction markets. Its purpose is to monitor market data, evaluate macroeconomic signals, apply risk controls, and either simulate or submit trading actions. The code is organized into separate modules so that market access, strategy logic, safety checks, and persistence are handled independently.
+
+The repo is designed around a few core ideas:
+- read and maintain market order book state
+- connect to Kalshi APIs for real-time or signed requests
+- track macroeconomic release events
+- apply position-sizing and risk rules
+- store trade and release logs locally
+- support a CLI for manual testing and diagnostics
+
+High-level architecture
+----------------------
+The project is divided into logical packages:
+- main.py: the main runtime entry point
+- cli.py: command-line interface for manual actions
+- config.py: environment and configuration loading
+- data/: database logging utilities
+- execution/: order placement and fee tracking
+- market/: order book and websocket handling
+- safety/: kill-switch and risk controls
+- strategy/: macroeconomic event logic
+- tests/: automated tests
+
+Main runtime entry point
+------------------------
+The main program is in main.py.
+
+What it does:
+1. Initializes the database.
+2. Validates configuration and credentials.
+3. Loads environment-based settings such as ticker, sector, indicator, and polling interval.
+4. Creates the order book and strategy objects.
+5. Connects to the Kalshi WebSocket feed.
+6. Repeatedly polls for macroeconomic updates and checks safety conditions.
+7. Logs status information and handles shutdown signals.
+
+The main loop is intended to run continuously and monitor both the market and the bot's safety constraints.
+
+Command-line interface
+----------------------
+The CLI is implemented in cli.py.
+
+It provides multiple commands, including:
+- run-bot: starts the bot for a specified ticker and sector
+- kill-switch: cancels all open orders through the safety system
+- view-book: displays the real-time order book for a market
+- test-diagnostics: validates configuration and authentication setup
+- view-cutoff: fetches historical cutoff timestamps from the API
+- trigger-mock-release: simulates a macroeconomic release event
+
+This makes the project usable both for live operations and for testing workflows without needing to execute the full daemon immediately.
+
+Configuration layer
+-------------------
+The configuration logic is in config.py.
+
+It loads environment variables using python-dotenv and defines settings such as:
+- KALSHI_API_KEY_ID
+- KALSHI_PRIVATE_KEY_PATH
+- KALSHI_ENV (demo or prod)
+- SHADOW_MODE
+- FRED_API_KEY
+- DATABASE_PATH
+- risk parameters such as MAX_VAR_LIMIT_PCT, MAX_SECTOR_LIMIT_PCT, and KELLY_MULTIPLIER
+- KILL_SWITCH_MIN_BALANCE
+
+The class Config also defines methods for:
+- reading the private RSA key from disk
+- choosing the correct REST API base URL
+- choosing the correct websocket URL
+- validating that required settings exist
+
+Important detail:
+The code expects both the API key ID and a valid private RSA key in order to sign requests. This is one of the major operational requirements for running the bot successfully.
+
+Database layer
+--------------
+The database code is in data/database.py.
+
+It uses SQLite and creates tables for:
+- macro_releases: stores economic release events and values
+- shadow_trades: stores simulated or logged trades
+- market_data_history: stores market snapshots over time
+
+This matters because the program does not rely only on memory. It keeps a persistent historical record of each release and trade event.
+
+The database helpers include:
+- initialize_db(): creates tables if missing
+- log_release(): inserts a macro release record
+- log_shadow_trade(): inserts a shadow trade record
+- log_market_data(): stores bid/ask market data snapshots
+
+Execution engine
+----------------
+The execution logic is in execution/engine.py.
+
+This module contains ExecutionEngine, which is responsible for:
+- signing requests with the Kalshi authentication scheme
+- formatting prices and quantities correctly
+- placing orders through the REST API
+- handling shadow mode behavior
+- tracking fees and rounding overpayments
+
+The place_order() method prepares an order payload like:
+- ticker
+- action (buy or sell)
+- type (limit)
+- price
+- count
+- outcome_side
+- book_side
+- client order id
+- time in force
+
+In shadow mode, the bot does not submit the actual request to the exchange. Instead, it:
+- simulates the order fill logic
+- writes a JSON log entry to logs/shadow_trades.log
+- stores a record in the SQLite database
+
+This allows testing and safe validation without live execution.
+
+Fee tracking
+------------
+The fee logic is in execution/fee_tracker.py.
+
+The FeeAccumulatorTracker keeps track of rounding differences between:
+- exact fill value
+- rounded whole-cent value
+
+It calculates:
+- actual_value
+- rounded_value
+- overpayment
+- rebate_received
+
+The design is important because prediction market pricing often has rounding behavior that causes small overpayments. The tracker accumulates these differences and triggers rebates when enough overpayment builds up.
+
+Order book handling
+-------------------
+The order book implementation is in market/order_book.py.
+
+LocalOrderBook stores bid/ask information for YES and NO outcomes using Decimal values for accuracy.
+
+It supports:
+- apply_snapshot(): loads a snapshot message and initializes the local book
+- apply_delta(): updates quantity levels as incremental messages arrive
+- get_yes_bids(), get_yes_asks(), get_no_bids(), get_no_asks()
+- get_best_yes_bid(), get_best_yes_ask(), and the corresponding NO helpers
+
+A key idea here is that the bot keeps a local representation of the market state instead of querying the exchange every time. This makes the strategy logic faster and allows the code to reason about price levels and spreads.
+
+The order book also computes synthetic prices:
+- YES ask price is derived from NO bids as 1.00 - NO bid price
+- NO ask price is derived from YES bids as 1.00 - YES bid price
+
+This makes it possible to reason about both sides of the market even when only one side is directly advertised.
+
+Websocket client
+---------------
+The websocket client is in market/websocket_client.py.
+
+KalshiWebSocketClient is responsible for:
+- validating config
+- generating signed websocket authentication headers
+- connecting to the websocket endpoint
+- subscribing to the requested market ticker
+- processing snapshot and delta messages
+- updating the local order book
+
+The client runs in a background thread and uses callbacks if a UI or CLI wants to display updates live.
+
+This is one of the most important parts of the project because it gives live market visibility.
+
+Risk management
+---------------
+The risk manager is in safety/risk_manager.py.
+
+RiskManager calculates position sizing based on:
+- Kelly Criterion
+- fractional Kelly scaling
+- VaR-style cap (maximum 2% per position)
+- sector concentration limit (30% per sector)
+
+The file defines:
+- calculate_kelly_fraction(): calculates the raw edge-based fraction
+- get_position_size_fraction(): applies Kelly scaling and VaR cap
+- get_max_allowed_wager_for_sector(): ensures sector exposure stays under limits
+- size_order(): returns the maximum allowed dollar wager for a position
+
+This is important because the system is not just making trading guesses; it is trying to control size and exposure.
+
+Kill switch / safety system
+--------------------------
+The safety module is in safety/kill_switch.py.
+
+KillSwitch contains logic to:
+- verify configuration
+- generate authenticated headers
+- fetch account balance
+- cancel all resting orders if needed
+- trigger a shutdown-like safety response when the account balance goes below a threshold
+
+The check_and_trigger() method is crucial. It checks balance against the configured threshold and if the balance is too low, it forces order cancellation.
+
+This makes the bot safer in practice because it has a fail-safe path that may reduce harm if something goes wrong.
+
+Strategy components
+-------------------
+The strategy code is in strategy/macro_tracker.py.
+
+There are two main conceptual parts:
+1. MockCalendarProvider
+2. FredCalendarProvider
+3. MacroTrackerStrategy
+
+MockCalendarProvider
+- simulates macroeconomic releases for indicators like CPI, FOMC, and PCE
+- logs the release to the database
+- determines whether the signal is bullish or bearish relative to forecast
+- computes a side (yes or no) and estimated probability
+- uses risk sizing and execution engine to place or simulate a trade
+
+FredCalendarProvider
+- contacts the FRED API using the configured API key
+- fetches the latest observation for a specific series
+- returns date, value, and prior value information
+
+MacroTrackerStrategy
+- uses FredCalendarProvider to retrieve live macroeconomic data
+- checks whether the release is new based on the database
+- if new, triggers the trade logic
+
+This is the project's main strategy idea: watch key macroeconomic data, detect new releases, and act on the resulting market signal.
+
+How the trading logic works
+---------------------------
+The high-level trading flow is:
+1. The bot connects to the websocket feed.
+2. The order book is populated with market prices.
+3. The main loop polls for new macroeconomic data.
+4. If the strategy sees a new release, it computes a signal.
+5. It looks at the live market price and decides which side to buy.
+6. It uses the risk manager to size the position.
+7. It places an order in live mode or a shadow order in shadow mode.
+8. It updates logs and tracking stats.
+
+The bot's logic is built around a combination of:
+- market data
+- macro signals
+- risk sizing
+- execution simulation/logging
+
+What makes the project interesting
+---------------------------------
+The project is not just a simple script. It combines multiple patterns:
+- event-driven market updates from websocket messages
+- periodic polling for economic releases
+- persistent data logs for replay and auditing
+- defensive risk controls
+- CLI tools for inspection and manual control
+- a shadow mode for simulated trading without live risk
+
+This hybrid design is what makes it more than a trivial script.
+
+Testing
+-------
+The tests are in tests/test_kalshi.py.
+
+The automated tests cover:
+- fixed-point formatting for prices and quantities
+- fee accumulator behavior and rebate rules
+- Kelly sizing calculations
+- sector concentration limits
+- order book synthetic ask calculations
+- shadow mode interception
+- database logging behavior
+- macro strategy trigger logic
+- main loop behavior under mocks
+
+The fact that the test suite exists and runs successfully is a good sign that the project has at least some verification coverage.
+
+What the project depends on
+---------------------------
+Dependencies listed in requirements.txt include:
+- python-dotenv
+- cryptography
+- websocket-client
+- requests
+- pytest
+
+These libraries support:
+- environment loading
+- cryptographic signing
+- websocket connections
+- REST requests
+- test execution
+
+Deployment and operational setup
+-------------------------------
+The repo includes:
+- Dockerfile for containerized execution
+- docker-compose.yml for orchestration
+- deploy.sh for installing Docker and starting the service
+
+This suggests the project is intended to be run in a server or VPS-like environment rather than only as a local notebook.
+
+Potential concerns / real-world readiness
+----------------------------------------
+The code is structured in a thoughtful way, but real-world readiness depends heavily on external factors:
+- proper API credentials and private key setup
+- valid market data availability
+- correct handling of exchange-specific message formats
+- robust exception handling during live trading
+- operational monitoring and logging in production
+- careful review of trading logic before using real capital
+
+The repo does include safety measurements, but actual production usage would still require careful review and possibly additional hardening.
+
+In short
+--------
+This project is a modular Python trading bot for Kalshi prediction markets.
+It combines:
+- live market subscription via websocket
+- macroeconomic data monitoring
+- local order book tracking
+- signed API authentication
+- risk sizing and safety controls
+- SQLite logging
+- a CLI for manual testing and control
+
+It is built as a collection of clearly separated components, which makes it easier to understand, modify, and extend.

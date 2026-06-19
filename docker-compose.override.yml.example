@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  kalshi-bot:
+    environment:
+      - LOG_LEVEL=DEBUG
+      - SHADOW_MODE=True
+      - KALSHI_ENV=demo
+      - POLL_INTERVAL_SEC=10
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./kalshi_private.pem:/etc/kalshi/keys/kalshi_private.pem:ro
+    restart: "no"

@@ -1,0 +1,96 @@
+{
+  "title": "Kalshi Bot Dashboard",
+  "uid": "kalshi-bot",
+  "version": 1,
+  "panels": [
+    {
+      "title": "Account Balance",
+      "type": "graph",
+      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "kalshi_total_capital_dollars", "legendFormat": "Balance"}
+      ]
+    },
+    {
+      "title": "Open Positions",
+      "type": "stat",
+      "gridPos": {"x": 8, "y": 0, "w": 4, "h": 6},
+      "targets": [
+        {"expr": "kalshi_positions_open", "legendFormat": "Open"}
+      ]
+    },
+    {
+      "title": "WebSocket Status",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 0, "w": 4, "h": 6},
+      "targets": [
+        {"expr": "kalshi_ws_connections", "legendFormat": "Connections"}
+      ]
+    },
+    {
+      "title": "Position P&L",
+      "type": "graph",
+      "gridPos": {"x": 0, "y": 6, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "kalshi_position_pnl_dollars", "legendFormat": "{{ticker}} {{pnl_type}}"}
+      ]
+    },
+    {
+      "title": "Orders Placed",
+      "type": "graph",
+      "gridPos": {"x": 8, "y": 6, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "rate(kalshi_orders_placed_total[5m])", "legendFormat": "{{ticker}} {{side}}"}
+      ]
+    },
+    {
+      "title": "Order Latency",
+      "type": "heatmap",
+      "gridPos": {"x": 0, "y": 12, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "kalshi_order_latency_seconds_bucket", "format": "heatmap"}
+      ]
+    },
+    {
+      "title": "System Resources",
+      "type": "graph",
+      "gridPos": {"x": 8, "y": 12, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "kalshi_system_memory_usage_bytes", "legendFormat": "Memory"},
+        {"expr": "kalshi_system_cpu_usage_percent", "legendFormat": "CPU"}
+      ]
+    },
+    {
+      "title": "Circuit Breakers",
+      "type": "table",
+      "gridPos": {"x": 0, "y": 18, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "kalshi_circuit_breaker_state", "legendFormat": "{{name}}"}
+      ]
+    },
+    {
+      "title": "DLQ Size",
+      "type": "graph",
+      "gridPos": {"x": 8, "y": 18, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "kalshi_dlq_size", "legendFormat": "{{name}}"}
+      ]
+    },
+    {
+      "title": "DB Stats",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 24, "w": 4, "h": 4},
+      "targets": [
+        {"expr": "kalshi_db_query_latency_ms", "legendFormat": "Query Latency"}
+      ]
+    },
+    {
+      "title": "Rate Limiter Tokens",
+      "type": "graph",
+      "gridPos": {"x": 4, "y": 24, "w": 8, "h": 4},
+      "targets": [
+        {"expr": "kalshi_rate_limiter_available_tokens", "legendFormat": "{{tier}}"}
+      ]
+    }
+  ]
+}

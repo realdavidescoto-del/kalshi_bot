@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  kalshi-bot:
+    build: .
+    container_name: kalshi-trading-bot
+    user: "1000:1000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./kalshi_private.pem:/etc/kalshi/keys/kalshi_private.pem:ro
+    restart: unless-stopped
+    stop_grace_period: 30s
+    init: true
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    networks:
+      - internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+
+networks:
+  internal:
+    driver: bridge
