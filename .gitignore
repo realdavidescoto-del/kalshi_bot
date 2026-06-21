@@ -1,12 +1,14 @@
 # Secrets
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 certificates/
 
-# Runtime data
-data/
+# Runtime data - track source files, ignore databases
+data/*.db
+data/*.sqlite
 logs/
 *.db
 shadow_trades.log
@@ -27,6 +29,9 @@ venv/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Duplicate project root (artifact)
+/kalshi_bot/
 
 # Docker
 .dockerignore

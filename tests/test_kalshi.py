@@ -37,12 +37,12 @@ def test_fixed_point_formatting():
 
 def test_prod_ws_url_uses_supported_endpoint():
     """
-    Production websocket connections should use the supported elections endpoint.
+    Production websocket connections should use the external-api-ws endpoint.
     """
     original_env = Config.ENV
     Config.ENV = "prod"
     try:
-        assert Config.get_ws_url() == f"wss://api.elections.kalshi.com/trade-api/ws/{Config.API_VERSION}"
+        assert Config.get_ws_url() == f"wss://external-api-ws.kalshi.com/trade-api/ws/{Config.API_VERSION}"
     finally:
         Config.ENV = original_env
 
